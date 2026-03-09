@@ -1,0 +1,183 @@
+{
+	"name": "advanced-multi-root",
+	"displayName": "Advanced Multi-Root",
+	"description": "Manage multiple projects in a single VS Code window with tabs",
+	"version": "1.0.0",
+	"publisher": "JotaOdiceu",
+	"license": "MIT",
+	"icon": "resources/icon.png",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/JotaOdiceu/advanced-multi-root"
+	},
+	"homepage": "https://github.com/JotaOdiceu/advanced-multi-root#readme",
+	"bugs": {
+		"url": "https://github.com/JotaOdiceu/advanced-multi-root/issues"
+	},
+	"keywords": [
+		"project",
+		"workspace",
+		"tabs",
+		"multi-root",
+		"project-manager",
+		"workspace-manager"
+	],
+	"galleryBanner": {
+		"color": "#1e1e1e",
+		"theme": "dark"
+	},
+	"engines": {
+		"vscode": "^1.109.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "tabs.addTab",
+				"title": "Tabs: Add Project",
+				"icon": "$(add)"
+			},
+			{
+				"command": "tabs.removeAll",
+				"title": "Remove All",
+				"icon": "$(trash)"
+			},
+			{
+				"command": "tabs.removeTab",
+				"title": "Remove",
+				"icon": "$(trash)"
+			},
+			{
+				"command": "tabs.renameTab",
+				"title": "Rename",
+				"icon": "$(edit)"
+			},
+			{
+				"command": "tabs.switchTab",
+				"title": "Open Project",
+				"icon": "$(folder-opened)"
+			},
+			{
+				"command": "tabs.switchTabById",
+				"title": "Tabs: Switch to Project by ID"
+			},
+			{
+				"command": "tabs.saveCurrentAsTab",
+				"title": "Tabs: Save Current Folder as Tab",
+				"icon": "$(save)"
+			},
+			{
+				"command": "tabs.refresh",
+				"title": "Refresh",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "tabs.openSettings",
+				"title": "Tabs: Settings",
+				"icon": "$(gear)"
+			}
+		],
+		"configuration": {
+			"title": "Tabs",
+			"properties": {
+				"tabs.defaultFolder": {
+					"type": "string",
+					"default": "",
+					"description": "Default folder to open when adding a new project. Leave empty to use home directory."
+				}
+			}
+		},
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "tabs-container",
+					"title": "Tabs",
+					"icon": "resources/icon.svg"
+				}
+			]
+		},
+		"views": {
+			"tabs-container": [
+				{
+					"id": "tabs-projects",
+					"name": "Projects",
+					"icon": "$(folder)",
+					"contextualTitle": "Tabs"
+				}
+			]
+		},
+		"menus": {
+			"view/title": [
+				{
+					"command": "tabs.addTab",
+					"when": "view == tabs-projects",
+					"group": "navigation@1"
+				},
+				{
+					"command": "tabs.saveCurrentAsTab",
+					"when": "view == tabs-projects",
+					"group": "navigation@2"
+				},
+				{
+					"command": "tabs.removeAll",
+					"when": "view == tabs-projects",
+					"group": "navigation@3"
+				},
+				{
+					"command": "tabs.refresh",
+					"when": "view == tabs-projects",
+					"group": "navigation@4"
+				},
+				{
+					"command": "tabs.openSettings",
+					"when": "view == tabs-projects",
+					"group": "navigation@5"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "tabs.renameTab",
+					"when": "view == tabs-projects && viewItem =~ /^tab/",
+					"group": "inline@1"
+				},
+				{
+					"command": "tabs.removeTab",
+					"when": "view == tabs-projects && viewItem =~ /^tab/",
+					"group": "inline@2"
+				}
+			]
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run package",
+		"compile": "npm run check-types && npm run lint && node esbuild.js",
+		"watch": "npm-run-all -p watch:*",
+		"watch:esbuild": "node esbuild.js --watch",
+		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+		"package": "npm run check-types && npm run lint && node esbuild.js --production",
+		"compile-tests": "tsc -p . --outDir out",
+		"watch-tests": "tsc -p . -w --outDir out",
+		"pretest": "npm run compile-tests && npm run compile && npm run lint",
+		"check-types": "tsc --noEmit",
+		"lint": "biome check src",
+		"format": "biome format --write src",
+		"test": "vscode-test"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.6",
+		"@types/mocha": "^10.0.10",
+		"@types/node": "22.x",
+		"@types/vscode": "^1.109.0",
+		"@vscode/test-cli": "^0.0.12",
+		"@vscode/test-electron": "^2.5.2",
+		"esbuild": "^0.27.2",
+		"npm-run-all": "^4.1.5",
+		"typescript": "^5.9.3"
+	}
+}
