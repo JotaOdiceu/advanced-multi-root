@@ -2,7 +2,7 @@
 	"name": "advanced-multi-root",
 	"displayName": "Advanced Multi-Root",
 	"description": "Manage multiple projects in a single VS Code window with tabs",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"publisher": "JotaOdiceu",
 	"license": "MIT",
 	"icon": "resources/icon.png",
