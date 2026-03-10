@@ -22,17 +22,17 @@ This project is a fork of **VSC Tab**. **Advanced Multi-Root** allows you to wor
 
 The following commands are available via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) or interface shortcuts:
 
-| Command                            | Command ID              | Description                                                    |
-|------------------------------------|-------------------------|----------------------------------------------------------------|
-| `Tabs: Add Project`                | `tabs.addTab`           | Add a new project to the list.                                 |
-| `Remove All`                       | `tabs.removeAll`        | Remove all projects from the list.                             |
-| `Remove`                           | `tabs.removeTab`        | Remove the selected project.                                   |
-| `Rename`                           | `tabs.renameTab`        | Rename the selected project tab.                               |
-| `Open Project`                     | `tabs.switchTab`        | Open / switch to the selected project.                         |
-| `Tabs: Switch to Project by ID`    | `tabs.switchTabById`    | Switch to a specific project (internal use in the status bar). |
-| `Tabs: Save Current Folder as Tab` | `tabs.saveCurrentAsTab` | Save the active workspace folder as a project.                 |
-| `Refresh`                          | `tabs.refresh`          | Refresh the project list in the interface.                     |
-| `Tabs: Settings`                   | `tabs.openSettings`     | Open extension settings (set default folder).                  |
+| Command                                               | Command ID              | Description                                                    |
+|-------------------------------------------------------|-------------------------|----------------------------------------------------------------|
+| `Advanced Multi-Root: Add Project`                    | `tabs.addTab`           | Add a new project to the list.                                 |
+| `Advanced Multi-Root: Remove All Projects`            | `tabs.removeAll`        | Remove all projects from the list.                             |
+| `Advanced Multi-Root: Remove Project`                 | `tabs.removeTab`        | Remove the selected project.                                   |
+| `Advanced Multi-Root: Rename Project`                 | `tabs.renameTab`        | Rename the selected project tab.                               |
+| `Advanced Multi-Root: Open Project`                   | `tabs.switchTab`        | Open / switch to the selected project.                         |
+| `Advanced Multi-Root: Switch to Project by ID`        | `tabs.switchTabById`    | Switch to a specific project (internal use in the status bar). |
+| `Advanced Multi-Root: Save Current Folder as Project` | `tabs.saveCurrentAsTab` | Save the active workspace folder as a project.                 |
+| `Advanced Multi-Root: Refresh Projects`               | `tabs.refresh`          | Refresh the project list in the interface.                     |
+| `Advanced Multi-Root: Settings`                       | `tabs.openSettings`     | Open extension settings (set default folder).                  |
 
 ## License
 
