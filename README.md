@@ -7,7 +7,7 @@ This project is a fork of **VSC Tab**. **Advanced Multi-Root** allows you to wor
 ## Features
 
 - **Simplified Navigation** — Switch between projects instantly in the sidebar or via the status bar.
-- **Session Memory** — When switching projects, your open files and terminals are kept in memory. Return to the project and pick up exactly where you left off.
+- **Session Memory** — When switching projects, your open files are kept in memory and your terminals remain open and preserved. Return to the project and pick up exactly where you left off.
 - **Organization** — Easily add, rename, or remove projects from your list.
 - **Save Current Folder** — Turn the folder you currently have open into a project in the list with a single click.
 
@@ -22,17 +22,17 @@ This project is a fork of **VSC Tab**. **Advanced Multi-Root** allows you to wor
 
 The following commands are available via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) or interface shortcuts:
 
-| Command                                               | Command ID              | Description                                                    |
-|-------------------------------------------------------|-------------------------|----------------------------------------------------------------|
-| `Advanced Multi-Root: Add Project`                    | `tabs.addTab`           | Add a new project to the list.                                 |
-| `Advanced Multi-Root: Remove All Projects`            | `tabs.removeAll`        | Remove all projects from the list.                             |
-| `Advanced Multi-Root: Remove Project`                 | `tabs.removeTab`        | Remove the selected project.                                   |
-| `Advanced Multi-Root: Rename Project`                 | `tabs.renameTab`        | Rename the selected project tab.                               |
-| `Advanced Multi-Root: Open Project`                   | `tabs.switchTab`        | Open / switch to the selected project.                         |
-| `Advanced Multi-Root: Switch to Project by ID`        | `tabs.switchTabById`    | Switch to a specific project (internal use in the status bar). |
-| `Advanced Multi-Root: Save Current Folder as Project` | `tabs.saveCurrentAsTab` | Save the active workspace folder as a project.                 |
-| `Advanced Multi-Root: Refresh Projects`               | `tabs.refresh`          | Refresh the project list in the interface.                     |
-| `Advanced Multi-Root: Settings`                       | `tabs.openSettings`     | Open extension settings (set default folder).                  |
+| Command                                             | Command ID              | Description                                                    |
+|-----------------------------------------------------|-------------------------|----------------------------------------------------------------|
+| Advanced Multi-Root: Add Project                    | `tabs.addTab`           | Add a new project to the list.                                 |
+| Advanced Multi-Root: Rename Project                 | `tabs.renameTab`        | Rename the selected project tab.                               |
+| Advanced Multi-Root: Open Project                   | `tabs.switchTab`        | Open / switch to the selected project.                         |
+| Advanced Multi-Root: Switch to Project by ID        | `tabs.switchTabById`    | Switch to a specific project (internal use in the status bar). |
+| Advanced Multi-Root: Save Current Folder as Project | `tabs.saveCurrentAsTab` | Save the active workspace folder as a project.                 |
+| Advanced Multi-Root: Refresh Projects               | `tabs.refresh`          | Refresh the project list in the interface.                     |
+| Advanced Multi-Root: Remove Project                 | `tabs.removeTab`        | Remove the selected project.                                   |
+| Advanced Multi-Root: Remove All Projects            | `tabs.removeAll`        | Remove all projects from the list.                             |
+| Advanced Multi-Root: Settings                       | `tabs.openSettings`     | Open extension settings (set default folder).                  |
 
 ## License
 
