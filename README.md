@@ -2,6 +2,10 @@
 
 **Manage multiple projects in a single VS Code window with tabs.**
 
+<p align="center">
+  <img src="resources/demo.png" alt="Advanced Multi-Root Demo" width="800">
+</p>
+
 This project is a fork of **VSC Tab**. **Advanced Multi-Root** allows you to work with multiple projects in the same window without needing to open them all at once. It enables easy navigation between them through tabs, keeping your open files and terminals memorized for each project individually.
 
 ## Features
@@ -10,6 +14,10 @@ This project is a fork of **VSC Tab**. **Advanced Multi-Root** allows you to wor
 - **Session Memory** — When switching projects, your open files are kept in memory and your terminals remain open and preserved. Return to the project and pick up exactly where you left off.
 - **Organization** — Easily add, rename, or remove projects from your list.
 - **Save Current Folder** — Turn the folder you currently have open into a project in the list with a single click.
+
+<p align="center">
+  <img src="resources/demo.gif" alt="Advanced Multi-Root Demo" width="900">
+</p>
 
 ## How to Use
 
