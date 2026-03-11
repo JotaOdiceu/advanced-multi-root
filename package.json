@@ -1,27 +1,19 @@
 {
   "name": "advanced-multi-root",
   "displayName": "Advanced Multi-Root",
-  "description": "Manage multiple projects in a single VS Code window with tabs",
+  "description": "Manage multiple projects in a single VS Code window using project tabs",
   "version": "1.0.3",
   "publisher": "JotaOdiceu",
   "license": "MIT",
   "icon": "resources/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JotaOdiceu/advanced-multi-root"
+    "url": "https://github.com/JotaOdiceu/advanced-multi-root.git"
   },
   "homepage": "https://github.com/JotaOdiceu/advanced-multi-root#readme",
   "bugs": {
     "url": "https://github.com/JotaOdiceu/advanced-multi-root/issues"
   },
-  "keywords": [
-    "project",
-    "workspace",
-    "tabs",
-    "multi-root",
-    "project-manager",
-    "workspace-manager"
-  ],
   "galleryBanner": {
     "color": "#1e1e1e",
     "theme": "dark"
@@ -30,7 +22,21 @@
     "vscode": "^1.107.0"
   },
   "categories": [
+    "Visualization",
     "Other"
+  ],
+  "keywords": [
+    "workspace",
+    "multi-root",
+    "project manager",
+    "workspace manager",
+    "project switcher",
+    "workspace switcher",
+    "project tabs",
+    "workspace tabs",
+    "multiple projects",
+    "project navigation",
+    "developer workflow"
   ],
   "activationEvents": [
     "onStartupFinished"
