@@ -42,6 +42,12 @@ The following commands are available via the Command Palette (`Ctrl+Shift+P` / `
 | Advanced Multi-Root: Remove All Projects            | `tabs.removeAll`        | Remove all projects from the list.                             |
 | Advanced Multi-Root: Settings                       | `tabs.openSettings`     | Open extension settings (set default folder).                  |
 
+## Why Advanced Multi-Root?
+
+VS Code supports multi-root workspaces, but switching between them quickly is still cumbersome.
+
+Advanced Multi-Root introduces a tab-based project switcher that keeps your terminals open and open files isolated per project.
+
 ## License
 
 [MIT](LICENSE)
