@@ -132,6 +132,36 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
   }
 
+  /** fsPath of the open folder, or undefined for multi-root / empty windows. */
+  private currentWorkspacePath(): string | undefined {
+    const wsFolders = vscode.workspace.workspaceFolders;
+    return wsFolders && wsFolders.length === 1
+      ? wsFolders[0].uri.fsPath
+      : undefined;
+  }
+
+  /** URIs (as strings) of every open text editor across all tab groups. */
+  private collectOpenTextUris(): string[] {
+    const uris: string[] = [];
+    for (const group of vscode.window.tabGroups.all) {
+      for (const t of group.tabs) {
+        if (t.input instanceof vscode.TabInputText) {
+          uris.push(t.input.uri.toString());
+        }
+      }
+    }
+    return uris;
+  }
+
+  /** True when `uri` is the folder itself or a file nested under it. */
+  private uriBelongsToFolder(uri: vscode.Uri, folderPath: string): boolean {
+    if (uri.scheme !== 'file') {
+      return false;
+    }
+    const rel = path.relative(folderPath, uri.fsPath);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  }
+
   /** Find active tab based on currently open folder */
   private detectActiveTab(): void {
     const wsFolders = vscode.workspace.workspaceFolders;
@@ -190,19 +220,17 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
-    // 1) Save currently open editor tabs
-    if (this.activeTabId) {
-      const openUris: string[] = [];
-      for (const group of vscode.window.tabGroups.all) {
-        for (const t of group.tabs) {
-          if (t.input instanceof vscode.TabInputText) {
-            openUris.push(t.input.uri.toString());
-          }
-        }
-      }
+    // 1) Save the current editor session — but only into the slot of the tab
+    //    whose folder is actually open. If the user opened a git worktree or
+    //    an unrelated folder, activeTabId may not reflect what is on screen
+    //    and saving here would clobber another project's session.
+    const activeTab = this.activeTabId
+      ? this.tabs.find((t) => t.id === this.activeTabId)
+      : undefined;
+    if (activeTab && this.currentWorkspacePath() === activeTab.path) {
       await this.context.globalState.update(
-        `tabs.openFiles.${this.activeTabId}`,
-        openUris,
+        `tabs.openFiles.${activeTab.id}`,
+        this.collectOpenTextUris(),
       );
     }
 
@@ -220,20 +248,25 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     // Keep only this folder, completely remove others
     vscode.workspace.updateWorkspaceFolders(0, wsFolders.length, { uri });
 
-    // 3) Restore previously saved tabs of the new project
+    // 3) Restore the saved editor session of the new project, keeping only
+    //    files that live under this project's folder. Anything else is
+    //    leftover from a session that was mis-saved against this slot (e.g.
+    //    a worktree's files) and must not be reopened here.
     const savedUris = this.context.globalState.get<string[]>(
       `tabs.openFiles.${tab.id}`,
+      [],
     );
-    if (savedUris && savedUris.length > 0) {
-      for (const uriStr of savedUris) {
-        try {
-          const uriToOpen = vscode.Uri.parse(uriStr);
-          await vscode.commands.executeCommand('vscode.open', uriToOpen, {
-            preview: false,
-          });
-        } catch (e) {
-          console.error(`Failed to restore tab: ${uriStr}`, e);
+    for (const uriStr of savedUris) {
+      try {
+        const uriToOpen = vscode.Uri.parse(uriStr);
+        if (!this.uriBelongsToFolder(uriToOpen, tab.path)) {
+          continue;
         }
+        await vscode.commands.executeCommand('vscode.open', uriToOpen, {
+          preview: false,
+        });
+      } catch (e) {
+        console.error(`Failed to restore tab: ${uriStr}`, e);
       }
     }
 
