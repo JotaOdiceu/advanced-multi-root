@@ -15,10 +15,19 @@ export interface ProjectTab {
   folders: ProjectFolder[];
 }
 
+/** One open text editor, captured so it can be reopened where it was. */
+interface SavedEditor {
+  uri: string;
+  /** vscode.ViewColumn of the group it lived in. */
+  viewColumn?: number;
+  active?: boolean;
+  pinned?: boolean;
+}
+
 /** Editor session to reopen once a switch has taken effect. */
 interface PendingRestore {
   tabId: string;
-  uris: string[];
+  editors: SavedEditor[];
 }
 
 // ── Tree Item ──────────────────────────────────────────────
@@ -323,17 +332,35 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     return undefined;
   }
 
-  /** URIs (as strings) of every open text editor across all tab groups. */
-  private collectOpenTextUris(): string[] {
-    const uris: string[] = [];
+  /** Snapshot every open text editor: its URI, group, active and pinned state. */
+  private captureEditorSession(): SavedEditor[] {
+    const editors: SavedEditor[] = [];
     for (const group of vscode.window.tabGroups.all) {
       for (const t of group.tabs) {
         if (t.input instanceof vscode.TabInputText) {
-          uris.push(t.input.uri.toString());
+          editors.push({
+            uri: t.input.uri.toString(),
+            viewColumn: group.viewColumn,
+            active: t.isActive,
+            pinned: t.isPinned,
+          });
         }
       }
     }
-    return uris;
+    return editors;
+  }
+
+  /** Read a stored session, tolerating the old `string[]` shape. */
+  private readStoredSession(tabId: string): SavedEditor[] {
+    const raw = this.context.globalState.get<unknown>(
+      `tabs.openFiles.${tabId}`,
+    );
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.map((entry) =>
+      typeof entry === 'string' ? { uri: entry } : (entry as SavedEditor),
+    );
   }
 
   /** Find the active tab from the folders currently open in the workspace. */
@@ -431,7 +458,7 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     if (activeTab && this.workspaceMatchesTab(activeTab)) {
       await this.context.globalState.update(
         `tabs.openFiles.${activeTab.id}`,
-        this.collectOpenTextUris(),
+        this.captureEditorSession(),
       );
     }
 
@@ -471,11 +498,10 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     //    the extension host, so this has to survive into the next activation —
     //    applyPendingRestore() runs it there (and on folder-change events, for
     //    the cases where no reload happens).
-    const savedUris = this.context.globalState.get<string[]>(
-      `tabs.openFiles.${tab.id}`,
-      [],
-    );
-    const pending: PendingRestore = { tabId: tab.id, uris: savedUris };
+    const pending: PendingRestore = {
+      tabId: tab.id,
+      editors: this.readStoredSession(tab.id),
+    };
     await this.context.globalState.update('tabs.pendingRestore', pending);
 
     this.activeTabId = tab.id;
@@ -525,9 +551,10 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     }
 
     const folderUris = this.tabFolderUris(tab);
-    for (const uriStr of pending.uris) {
+    let activeEditor: SavedEditor | undefined;
+    for (const editor of pending.editors) {
       try {
-        const uri = vscode.Uri.parse(uriStr);
+        const uri = vscode.Uri.parse(editor.uri);
         // Keep only files under one of this project's folders; anything else
         // is leftover from a session that was mis-saved against this slot.
         if (!this.uriUnderFolders(uri, folderUris)) {
@@ -535,14 +562,36 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
         }
         await vscode.commands.executeCommand('vscode.open', uri, {
           preview: false,
+          viewColumn: editor.viewColumn,
         });
+        if (editor.pinned) {
+          await vscode.commands.executeCommand('workbench.action.pinEditor');
+        }
+        if (editor.active) {
+          activeEditor = editor;
+        }
       } catch (e) {
-        console.error(`Failed to restore editor: ${uriStr}`, e);
+        console.error(`Failed to restore editor: ${editor.uri}`, e);
+      }
+    }
+
+    // Re-focus whichever editor was active when the session was saved.
+    if (activeEditor) {
+      try {
+        await vscode.commands.executeCommand(
+          'vscode.open',
+          vscode.Uri.parse(activeEditor.uri),
+          { preview: false, viewColumn: activeEditor.viewColumn },
+        );
+      } catch {
+        // best effort
       }
     }
 
     await this.context.globalState.update('tabs.pendingRestore', undefined);
-    await vscode.commands.executeCommand('workbench.view.explorer');
+    if (!activeEditor) {
+      await vscode.commands.executeCommand('workbench.view.explorer');
+    }
   }
 
   // ── Save current workspace as a project ───────────
