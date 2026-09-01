@@ -489,30 +489,30 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
+    const wasActive = this.activeTabId === item.tab.id;
+    const wasOpen = this.currentWorkspacePath() === item.tab.path;
+
     this.tabs = this.tabs.filter((t) => t.id !== item.tab.id);
-    if (this.activeTabId === item.tab.id) {
+    await this.forgetSession(item.tab.id);
+    if (wasActive) {
       this.activeTabId = null;
     }
-
-    // Remove from Workspace (if it's the active one)
-    const wsFolders = vscode.workspace.workspaceFolders || [];
-    if (wsFolders.length === 1 && wsFolders[0].uri.fsPath === item.tab.path) {
-      // If there's another tab, switch to the first one so it doesn't stay empty
-      if (this.tabs.length > 0) {
-        const firstTab = this.tabs[0];
-        this.activeTabId = firstTab.id;
-        vscode.workspace.updateWorkspaceFolders(0, 1, {
-          uri: vscode.Uri.file(firstTab.path),
-        });
-      } else {
-        // If no tabs are left, clear all of them
-        vscode.workspace.updateWorkspaceFolders(0, 1);
-      }
-    }
-
     await this.save();
     this.refresh();
     this._onDidChangeTabs.fire();
+
+    // Only touch the workspace if the removed project was the open one.
+    if (!wasOpen) {
+      return;
+    }
+    if (this.tabs.length > 0) {
+      await this.switchProject(this.tabs[0].id);
+    } else {
+      vscode.workspace.updateWorkspaceFolders(
+        0,
+        vscode.workspace.workspaceFolders?.length ?? 0,
+      );
+    }
   }
 
   async removeAllTabs(): Promise<void> {
@@ -525,18 +525,26 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
+    for (const t of this.tabs) {
+      await this.forgetSession(t.id);
+    }
+    await this.context.globalState.update('tabs.pendingRestore', undefined);
     this.tabs = [];
     this.activeTabId = null;
 
-    // Optionally clear workspace folders completely
     vscode.workspace.updateWorkspaceFolders(
       0,
-      vscode.workspace.workspaceFolders?.length || 0,
+      vscode.workspace.workspaceFolders?.length ?? 0,
     );
 
     await this.save();
     this.refresh();
     this._onDidChangeTabs.fire();
+  }
+
+  /** Drop the persisted editor session for a tab that no longer exists. */
+  private async forgetSession(tabId: string): Promise<void> {
+    await this.context.globalState.update(`tabs.openFiles.${tabId}`, undefined);
   }
 
   async renameTab(item: TabTreeItem): Promise<void> {
