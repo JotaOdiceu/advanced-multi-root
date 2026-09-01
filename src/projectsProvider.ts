@@ -118,14 +118,14 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
         }
       }
       if (this.tabs.length > 0) {
-        this.save();
+        void this.save();
       }
     }
   }
 
-  private save(): void {
-    this.context.globalState.update('tabs.projectTabs', this.tabs);
-    this.context.globalState.update('tabs.activeTabId', this.activeTabId);
+  private async save(): Promise<void> {
+    await this.context.globalState.update('tabs.projectTabs', this.tabs);
+    await this.context.globalState.update('tabs.activeTabId', this.activeTabId);
   }
 
   private genId(): string {
@@ -140,7 +140,7 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       const match = this.tabs.find((t) => t.path === openPath);
       if (match) {
         this.activeTabId = match.id;
-        this.save();
+        void this.save();
         return;
       }
     }
@@ -190,7 +190,7 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
           }
         }
       }
-      this.context.globalState.update(
+      await this.context.globalState.update(
         `tabs.openFiles.${this.activeTabId}`,
         openUris,
       );
@@ -200,7 +200,7 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 
     this.activeTabId = tab.id;
-    this.save();
+    await this.save();
 
     const uri = vscode.Uri.file(tab.path);
 
@@ -280,7 +280,7 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     this.activeTabId =
       this.tabs.find((t) => t.path === wsFolders[0].uri.fsPath)?.id ??
       this.activeTabId;
-    this.save();
+    await this.save();
     this.refresh();
     vscode.window.showInformationMessage('Current folder saved as tab.');
   }
@@ -346,7 +346,7 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       this.activeTabId = this.tabs[this.tabs.length - 1].id;
     }
 
-    this.save();
+    await this.save();
     this.refresh();
     this._onDidChangeTabs.fire();
   }
@@ -382,7 +382,7 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       }
     }
 
-    this.save();
+    await this.save();
     this.refresh();
     this._onDidChangeTabs.fire();
   }
@@ -406,7 +406,7 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       vscode.workspace.workspaceFolders?.length || 0,
     );
 
-    this.save();
+    await this.save();
     this.refresh();
     this._onDidChangeTabs.fire();
   }
@@ -423,7 +423,7 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     const tab = this.tabs.find((t) => t.id === item.tab.id);
     if (tab) {
       tab.name = newName;
-      this.save();
+      await this.save();
       this.refresh();
       this._onDidChangeTabs.fire();
     }
