@@ -224,8 +224,9 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     //    whose folder is actually open. If the user opened a git worktree or
     //    an unrelated folder, activeTabId may not reflect what is on screen
     //    and saving here would clobber another project's session.
-    const activeTab = this.activeTabId
-      ? this.tabs.find((t) => t.id === this.activeTabId)
+    const previousActiveId = this.activeTabId;
+    const activeTab = previousActiveId
+      ? this.tabs.find((t) => t.id === previousActiveId)
       : undefined;
     if (activeTab && this.currentWorkspacePath() === activeTab.path) {
       await this.context.globalState.update(
@@ -234,21 +235,62 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       );
     }
 
-    // 2) Close all editors before switching to new project
+    // 2) Deal with unsaved changes first. closeAllEditors would otherwise pop
+    //    a save dialog per file and, if the user backs out, we would still
+    //    switch the workspace under half-saved editors.
+    const dirtyDocs = vscode.workspace.textDocuments.filter(
+      (d) => d.isDirty && !d.isUntitled,
+    );
+    if (dirtyDocs.length > 0) {
+      const choice = await vscode.window.showWarningMessage(
+        `You have ${dirtyDocs.length} unsaved file(s). Save before switching?`,
+        { modal: true },
+        'Save All',
+        "Don't Save",
+      );
+      if (choice !== 'Save All' && choice !== "Don't Save") {
+        return; // cancelled — stay on the current project
+      }
+      if (choice === 'Save All') {
+        await vscode.workspace.saveAll(false);
+      }
+    }
+
+    // 3) Close all editors. If dirty tabs survive (e.g. an untitled file whose
+    //    save prompt was dismissed), the user cancelled — abort the switch.
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    const dirtyRemains = vscode.window.tabGroups.all.some((g) =>
+      g.tabs.some((t) => t.isDirty),
+    );
+    if (dirtyRemains) {
+      vscode.window.showInformationMessage('Project switch cancelled.');
+      return;
+    }
 
     this.activeTabId = tab.id;
     await this.save();
 
     const uri = vscode.Uri.file(tab.path);
-
-    // Remove all existing folders from workspace and add ONLY this tab
     const wsFolders = vscode.workspace.workspaceFolders || [];
 
-    // Keep only this folder, completely remove others
-    vscode.workspace.updateWorkspaceFolders(0, wsFolders.length, { uri });
+    // 4) Replace every workspace folder with this project's folder. If VS Code
+    //    rejects the change, roll back the active-tab marker we just set.
+    const applied = vscode.workspace.updateWorkspaceFolders(
+      0,
+      wsFolders.length,
+      { uri },
+    );
+    if (!applied) {
+      vscode.window.showErrorMessage(
+        `Could not switch to "${tab.name}": the workspace folders could not be updated.`,
+      );
+      this.activeTabId = previousActiveId;
+      await this.save();
+      this._onDidChangeTabs.fire();
+      return;
+    }
 
-    // 3) Restore the saved editor session of the new project, keeping only
+    // 5) Restore the saved editor session of the new project, keeping only
     //    files that live under this project's folder. Anything else is
     //    leftover from a session that was mis-saved against this slot (e.g.
     //    a worktree's files) and must not be reopened here.
