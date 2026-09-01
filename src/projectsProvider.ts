@@ -139,12 +139,22 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       const openPath = wsFolders[0].uri.fsPath;
       const match = this.tabs.find((t) => t.path === openPath);
       if (match) {
-        this.activeTabId = match.id;
-        void this.save();
+        if (this.activeTabId !== match.id) {
+          this.activeTabId = match.id;
+          void this.save();
+        }
         return;
       }
     }
-    // Cannot detect active tab if multi-root or empty
+
+    // The open folder is not one of our tabs: a git worktree, an unrelated
+    // folder, a multi-root workspace, or an empty window. No tab is active.
+    // Keeping a stale activeTabId here is what makes the next switchTab
+    // overwrite another project's saved session with the wrong files.
+    if (this.activeTabId !== null) {
+      this.activeTabId = null;
+      void this.save();
+    }
   }
 
   // ── TreeDataProvider ───────────────────────────────────
