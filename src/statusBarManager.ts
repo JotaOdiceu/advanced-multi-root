@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ProjectTab } from './projectsProvider';
+import { folderLabel, ProjectTab } from './projectsProvider';
 
 /**
  * Shows workspace tabs in the status bar.
@@ -36,6 +36,7 @@ export class StatusBarManager implements vscode.Disposable {
 
     tabs.forEach((tab, i) => {
       const isActive = tab.id === activeId;
+      const folders = tab.folders.map(folderLabel).join(', ');
 
       // Center spread: first tab highest priority, last tab lowest
       const priority = StatusBarManager.CENTER_PRIORITY + (tabs.length - i);
@@ -51,10 +52,10 @@ export class StatusBarManager implements vscode.Disposable {
         item.backgroundColor = new vscode.ThemeColor(
           'statusBarItem.warningBackground',
         );
-        item.tooltip = `● Active: ${tab.path}`;
+        item.tooltip = `● Active: ${folders}`;
       } else {
         item.text = `$(folder) ${tab.name}`;
-        item.tooltip = `Switch to: ${tab.path}`;
+        item.tooltip = `Switch to: ${folders}`;
       }
 
       item.command = {
