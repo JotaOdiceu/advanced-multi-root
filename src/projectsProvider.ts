@@ -436,8 +436,10 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
-    const wsFolders = vscode.workspace.workspaceFolders || [];
-
+    // Register every picked folder first; switch once at the end. Calling
+    // updateWorkspaceFolders inside the loop activated each intermediate
+    // project and raced the async folder-change events.
+    const addedIds: string[] = [];
     for (const uri of uris) {
       const folderPath = uri.fsPath;
 
@@ -452,32 +454,29 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
         continue;
       }
 
-      const folderName = path.basename(folderPath);
       const tabName = await vscode.window.showInputBox({
         prompt: 'Tab name',
-        value: folderName,
+        value: path.basename(folderPath),
       });
       if (!tabName) {
         continue;
       }
 
-      this.tabs.push({
-        id: this.genId(),
-        name: tabName,
-        path: folderPath,
-      });
+      const id = this.genId();
+      this.tabs.push({ id, name: tabName, path: folderPath });
+      addedIds.push(id);
+    }
 
-      // Make the newly added one active and only show it
-      const uriToAdd = vscode.Uri.file(folderPath);
-      vscode.workspace.updateWorkspaceFolders(0, wsFolders.length, {
-        uri: uriToAdd,
-      });
-      this.activeTabId = this.tabs[this.tabs.length - 1].id;
+    if (addedIds.length === 0) {
+      return;
     }
 
     await this.save();
     this.refresh();
     this._onDidChangeTabs.fire();
+
+    // Open the last project that was added.
+    await this.switchProject(addedIds[addedIds.length - 1]);
   }
 
   async removeTab(item: TabTreeItem): Promise<void> {
