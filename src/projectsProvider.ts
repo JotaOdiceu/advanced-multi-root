@@ -85,6 +85,12 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
   private tabs: ProjectTab[] = [];
   private activeTabId: string | null = null;
 
+  /** Re-entrancy guards: a double click or a stray event must not start a
+   *  second switch (two workspace swaps = two window reloads) or a second
+   *  restore pass. */
+  private switching = false;
+  private restoring = false;
+
   private _onDidChangeTabs = new vscode.EventEmitter<void>();
   readonly onDidChangeTabs = this._onDidChangeTabs.event;
 
@@ -421,6 +427,18 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
    * close → swap → restore sequence stays in one place.
    */
   async switchProject(tabId: string): Promise<void> {
+    if (this.switching) {
+      return; // a switch is already running — ignore the re-entrant call
+    }
+    this.switching = true;
+    try {
+      await this.performSwitch(tabId);
+    } finally {
+      this.switching = false;
+    }
+  }
+
+  private async performSwitch(tabId: string): Promise<void> {
     const tab = this.tabs.find((t) => t.id === tabId);
     if (!tab) {
       return;
@@ -494,10 +512,10 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
-    // 4) Record the session to restore. Replacing workspace folder 0 restarts
-    //    the extension host, so this has to survive into the next activation —
-    //    applyPendingRestore() runs it there (and on folder-change events, for
-    //    the cases where no reload happens).
+    // 4) Record the session to restore. The workspace swap below restarts the
+    //    extension host, so this has to survive into the next activation:
+    //    applyPendingRestore() runs it from the constructor (and, for
+    //    multi-root swaps that don't reload, from the folder-change handler).
     const pending: PendingRestore = {
       tabId: tab.id,
       editors: this.readStoredSession(tab.id),
@@ -507,7 +525,19 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     this.activeTabId = tab.id;
     await this.save();
 
-    // 5) Swap the workspace to this project's folders.
+    // 5) Swap the workspace. A single-folder project uses openFolder — one
+    //    atomic reload, versus updateWorkspaceFolders which drops to an empty
+    //    workspace and back, reloading twice. Multi-root projects have to go
+    //    through updateWorkspaceFolders.
+    if (tab.folders.length === 1) {
+      await vscode.commands.executeCommand(
+        'vscode.openFolder',
+        vscode.Uri.parse(tab.folders[0].uri),
+        { forceReuseWindow: true },
+      );
+      return; // window is reloading; the fresh activation restores editors
+    }
+
     const wsCount = vscode.workspace.workspaceFolders?.length ?? 0;
     const applied = vscode.workspace.updateWorkspaceFolders(
       0,
@@ -528,17 +558,20 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
-    // 6) Fast path for switches that don't reload the window.
-    await this.applyPendingRestore();
+    // A multi-root swap may not reload the window; the folder-change handler
+    // then runs the restore. Don't restore here — this host may be tearing down.
     this._onDidChangeTabs.fire();
   }
 
   /**
    * Reopen the saved editors for a switch that is now in effect. Safe to call
-   * repeatedly — it only acts once the workspace actually shows the pending
-   * project, and clears the marker afterwards.
+   * repeatedly — an in-memory guard blocks concurrent runs, editors already
+   * open are skipped, and the marker is cleared only once everything is back.
    */
   private async applyPendingRestore(): Promise<void> {
+    if (this.restoring) {
+      return;
+    }
     const pending = this.context.globalState.get<PendingRestore>(
       'tabs.pendingRestore',
     );
@@ -550,9 +583,42 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return; // workspace is not (yet) on the target project
     }
 
+    this.restoring = true;
+    try {
+      await this.restoreEditors(tab, pending.editors);
+      await this.context.globalState.update('tabs.pendingRestore', undefined);
+    } finally {
+      this.restoring = false;
+    }
+  }
+
+  private async restoreEditors(
+    tab: ProjectTab,
+    editors: SavedEditor[],
+  ): Promise<void> {
     const folderUris = this.tabFolderUris(tab);
+    // Editors VS Code already restored (after a reload) or a previous,
+    // interrupted pass left open — don't reopen them.
+    const open = new Set(
+      vscode.window.tabGroups.all.flatMap((g) =>
+        g.tabs
+          .map((t) =>
+            t.input instanceof vscode.TabInputText
+              ? t.input.uri.toString()
+              : undefined,
+          )
+          .filter((u): u is string => u !== undefined),
+      ),
+    );
+
     let activeEditor: SavedEditor | undefined;
-    for (const editor of pending.editors) {
+    for (const editor of editors) {
+      if (editor.active) {
+        activeEditor = editor;
+      }
+      if (open.has(editor.uri)) {
+        continue;
+      }
       try {
         const uri = vscode.Uri.parse(editor.uri);
         // Keep only files under one of this project's folders; anything else
@@ -571,9 +637,6 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
         if (editor.pinned) {
           await vscode.commands.executeCommand('workbench.action.pinEditor');
         }
-        if (editor.active) {
-          activeEditor = editor;
-        }
       } catch (e) {
         console.error(`Failed to restore editor: ${editor.uri}`, e);
       }
@@ -590,10 +653,7 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       } catch {
         // best effort
       }
-    }
-
-    await this.context.globalState.update('tabs.pendingRestore', undefined);
-    if (!activeEditor) {
+    } else {
       await vscode.commands.executeCommand('workbench.view.explorer');
     }
   }
