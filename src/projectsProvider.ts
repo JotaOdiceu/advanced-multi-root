@@ -512,10 +512,10 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
-    // 4) Record the session to restore. The workspace swap below restarts the
-    //    extension host, so this has to survive into the next activation:
-    //    applyPendingRestore() runs it from the constructor (and, for
-    //    multi-root swaps that don't reload, from the folder-change handler).
+    // 4) Record the session to restore. The workspace swap below may restart
+    //    the extension host, so this has to survive into the next activation:
+    //    applyPendingRestore() runs it from the constructor and, for swaps
+    //    that don't reload, from the folder-change handler.
     const pending: PendingRestore = {
       tabId: tab.id,
       editors: this.readStoredSession(tab.id),
@@ -525,19 +525,9 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     this.activeTabId = tab.id;
     await this.save();
 
-    // 5) Swap the workspace. A single-folder project uses openFolder — one
-    //    atomic reload, versus updateWorkspaceFolders which drops to an empty
-    //    workspace and back, reloading twice. Multi-root projects have to go
-    //    through updateWorkspaceFolders.
-    if (tab.folders.length === 1) {
-      await vscode.commands.executeCommand(
-        'vscode.openFolder',
-        vscode.Uri.parse(tab.folders[0].uri),
-        { forceReuseWindow: true },
-      );
-      return; // window is reloading; the fresh activation restores editors
-    }
-
+    // 5) Replace every workspace folder with this project's folders in a single
+    //    atomic call. (openFolder would be one clean swap too, but it forces a
+    //    full window reload and re-triggers the Welcome editor.)
     const wsCount = vscode.workspace.workspaceFolders?.length ?? 0;
     const applied = vscode.workspace.updateWorkspaceFolders(
       0,
@@ -558,8 +548,8 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
-    // A multi-root swap may not reload the window; the folder-change handler
-    // then runs the restore. Don't restore here — this host may be tearing down.
+    // The swap either reloads (fresh activation restores) or doesn't (the
+    // folder-change handler restores). Not here — this host may be tearing down.
     this._onDidChangeTabs.fire();
   }
 
