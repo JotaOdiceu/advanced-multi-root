@@ -8,6 +8,12 @@ export interface ProjectTab {
   path: string;
 }
 
+/** Editor session to reopen once a switch has taken effect. */
+interface PendingRestore {
+  tabId: string;
+  uris: string[];
+}
+
 // ── Tree Item ──────────────────────────────────────────────
 
 export class TabTreeItem extends vscode.TreeItem {
@@ -52,9 +58,15 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     this.load();
     this.detectActiveTab();
 
+    // A switch that replaced workspace folder 0 restarts the extension host,
+    // so the editor restore has to run here, on the next activation.
+    void this.applyPendingRestore();
+
     // Update active tab when workspace folders change
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       this.detectActiveTab();
+      // Covers switches that swap folders without a window reload.
+      void this.applyPendingRestore();
       this._onDidChangeTreeData.fire(undefined);
       this._onDidChangeTabs.fire();
     });
@@ -202,28 +214,49 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     );
   }
 
-  // ── Core: Switch Tab ─────────────────────────────
+  // ── Core: Switch Project ─────────────────────────
 
+  /** Tree item click. */
   async switchTab(item: TabTreeItem): Promise<void> {
-    const tab = this.tabs.find((t) => t.id === item.tab.id);
+    await this.switchProject(item.tab.id);
+  }
+
+  /** Status bar / command invocation. */
+  async switchTabById(tabId: string): Promise<void> {
+    await this.switchProject(tabId);
+  }
+
+  /**
+   * The single entry point for making a project the active workspace. Every
+   * caller (tree, status bar, add, remove) goes through here so the save →
+   * close → swap → restore sequence stays in one place.
+   */
+  async switchProject(tabId: string): Promise<void> {
+    const tab = this.tabs.find((t) => t.id === tabId);
     if (!tab) {
       return;
     }
-
     if (!fs.existsSync(tab.path)) {
       vscode.window.showErrorMessage(`Folder "${tab.path}" does not exist.`);
       return;
     }
-
-    // Do nothing if already active tab is clicked
     if (tab.id === this.activeTabId) {
       return;
     }
 
-    // 1) Save the current editor session — but only into the slot of the tab
-    //    whose folder is actually open. If the user opened a git worktree or
-    //    an unrelated folder, activeTabId may not reflect what is on screen
-    //    and saving here would clobber another project's session.
+    // The project's folder is already the open one (e.g. adopted from a git
+    // worktree checkout or just added). Adopt it without the close/swap dance.
+    if (this.currentWorkspacePath() === tab.path) {
+      this.activeTabId = tab.id;
+      await this.save();
+      this._onDidChangeTabs.fire();
+      return;
+    }
+
+    // 1) Save the current session — but only into the slot of the tab whose
+    //    folder is actually open. If an unrelated folder (worktree, etc.) is
+    //    open, activeTabId may be stale and saving here would clobber another
+    //    project's session.
     const previousActiveId = this.activeTabId;
     const activeTab = previousActiveId
       ? this.tabs.find((t) => t.id === previousActiveId)
@@ -267,65 +300,76 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
+    // 4) Record the session to restore. Replacing workspace folder 0 restarts
+    //    the extension host, so this has to survive into the next activation —
+    //    applyPendingRestore() runs it there (and on folder-change events, for
+    //    the cases where no reload happens).
+    const savedUris = this.context.globalState.get<string[]>(
+      `tabs.openFiles.${tab.id}`,
+      [],
+    );
+    const pending: PendingRestore = { tabId: tab.id, uris: savedUris };
+    await this.context.globalState.update('tabs.pendingRestore', pending);
+
     this.activeTabId = tab.id;
     await this.save();
 
-    const uri = vscode.Uri.file(tab.path);
-    const wsFolders = vscode.workspace.workspaceFolders || [];
-
-    // 4) Replace every workspace folder with this project's folder. If VS Code
-    //    rejects the change, roll back the active-tab marker we just set.
-    const applied = vscode.workspace.updateWorkspaceFolders(
-      0,
-      wsFolders.length,
-      { uri },
-    );
+    // 5) Swap the workspace to this project's folder.
+    const wsCount = vscode.workspace.workspaceFolders?.length ?? 0;
+    const applied = vscode.workspace.updateWorkspaceFolders(0, wsCount, {
+      uri: vscode.Uri.file(tab.path),
+    });
     if (!applied) {
       vscode.window.showErrorMessage(
         `Could not switch to "${tab.name}": the workspace folders could not be updated.`,
       );
       this.activeTabId = previousActiveId;
+      await this.context.globalState.update('tabs.pendingRestore', undefined);
       await this.save();
       this._onDidChangeTabs.fire();
       return;
     }
 
-    // 5) Restore the saved editor session of the new project, keeping only
-    //    files that live under this project's folder. Anything else is
-    //    leftover from a session that was mis-saved against this slot (e.g.
-    //    a worktree's files) and must not be reopened here.
-    const savedUris = this.context.globalState.get<string[]>(
-      `tabs.openFiles.${tab.id}`,
-      [],
-    );
-    for (const uriStr of savedUris) {
-      try {
-        const uriToOpen = vscode.Uri.parse(uriStr);
-        if (!this.uriBelongsToFolder(uriToOpen, tab.path)) {
-          continue;
-        }
-        await vscode.commands.executeCommand('vscode.open', uriToOpen, {
-          preview: false,
-        });
-      } catch (e) {
-        console.error(`Failed to restore tab: ${uriStr}`, e);
-      }
-    }
-
-    // Focus the Explorer
-    await vscode.commands.executeCommand('workbench.view.explorer');
-
+    // 6) Fast path for switches that don't reload the window.
+    await this.applyPendingRestore();
     this._onDidChangeTabs.fire();
   }
 
-  /** Switch to tab by ID — called from status bar */
-  async switchTabById(tabId: string): Promise<void> {
-    const tab = this.tabs.find((t) => t.id === tabId);
-    if (!tab) {
+  /**
+   * Reopen the saved editors for a switch that is now in effect. Safe to call
+   * repeatedly — it only acts once the workspace actually shows the pending
+   * project, and clears the marker afterwards.
+   */
+  private async applyPendingRestore(): Promise<void> {
+    const pending = this.context.globalState.get<PendingRestore>(
+      'tabs.pendingRestore',
+    );
+    if (!pending) {
       return;
     }
-    const treeItem = new TabTreeItem(tab, false);
-    await this.switchTab(treeItem);
+    const tab = this.tabs.find((t) => t.id === pending.tabId);
+    if (!tab || this.currentWorkspacePath() !== tab.path) {
+      return; // workspace is not (yet) on the target project
+    }
+
+    for (const uriStr of pending.uris) {
+      try {
+        const uri = vscode.Uri.parse(uriStr);
+        // Keep only files under this project's folder; anything else is
+        // leftover from a session that was mis-saved against this slot.
+        if (!this.uriBelongsToFolder(uri, tab.path)) {
+          continue;
+        }
+        await vscode.commands.executeCommand('vscode.open', uri, {
+          preview: false,
+        });
+      } catch (e) {
+        console.error(`Failed to restore editor: ${uriStr}`, e);
+      }
+    }
+
+    await this.context.globalState.update('tabs.pendingRestore', undefined);
+    await vscode.commands.executeCommand('workbench.view.explorer');
   }
 
   // ── Save current folder as tab ───────────────────
@@ -392,8 +436,10 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
-    const wsFolders = vscode.workspace.workspaceFolders || [];
-
+    // Register every picked folder first; switch once at the end. Calling
+    // updateWorkspaceFolders inside the loop activated each intermediate
+    // project and raced the async folder-change events.
+    const addedIds: string[] = [];
     for (const uri of uris) {
       const folderPath = uri.fsPath;
 
@@ -408,32 +454,29 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
         continue;
       }
 
-      const folderName = path.basename(folderPath);
       const tabName = await vscode.window.showInputBox({
         prompt: 'Tab name',
-        value: folderName,
+        value: path.basename(folderPath),
       });
       if (!tabName) {
         continue;
       }
 
-      this.tabs.push({
-        id: this.genId(),
-        name: tabName,
-        path: folderPath,
-      });
+      const id = this.genId();
+      this.tabs.push({ id, name: tabName, path: folderPath });
+      addedIds.push(id);
+    }
 
-      // Make the newly added one active and only show it
-      const uriToAdd = vscode.Uri.file(folderPath);
-      vscode.workspace.updateWorkspaceFolders(0, wsFolders.length, {
-        uri: uriToAdd,
-      });
-      this.activeTabId = this.tabs[this.tabs.length - 1].id;
+    if (addedIds.length === 0) {
+      return;
     }
 
     await this.save();
     this.refresh();
     this._onDidChangeTabs.fire();
+
+    // Open the last project that was added.
+    await this.switchProject(addedIds[addedIds.length - 1]);
   }
 
   async removeTab(item: TabTreeItem): Promise<void> {
@@ -446,30 +489,30 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
+    const wasActive = this.activeTabId === item.tab.id;
+    const wasOpen = this.currentWorkspacePath() === item.tab.path;
+
     this.tabs = this.tabs.filter((t) => t.id !== item.tab.id);
-    if (this.activeTabId === item.tab.id) {
+    await this.forgetSession(item.tab.id);
+    if (wasActive) {
       this.activeTabId = null;
     }
-
-    // Remove from Workspace (if it's the active one)
-    const wsFolders = vscode.workspace.workspaceFolders || [];
-    if (wsFolders.length === 1 && wsFolders[0].uri.fsPath === item.tab.path) {
-      // If there's another tab, switch to the first one so it doesn't stay empty
-      if (this.tabs.length > 0) {
-        const firstTab = this.tabs[0];
-        this.activeTabId = firstTab.id;
-        vscode.workspace.updateWorkspaceFolders(0, 1, {
-          uri: vscode.Uri.file(firstTab.path),
-        });
-      } else {
-        // If no tabs are left, clear all of them
-        vscode.workspace.updateWorkspaceFolders(0, 1);
-      }
-    }
-
     await this.save();
     this.refresh();
     this._onDidChangeTabs.fire();
+
+    // Only touch the workspace if the removed project was the open one.
+    if (!wasOpen) {
+      return;
+    }
+    if (this.tabs.length > 0) {
+      await this.switchProject(this.tabs[0].id);
+    } else {
+      vscode.workspace.updateWorkspaceFolders(
+        0,
+        vscode.workspace.workspaceFolders?.length ?? 0,
+      );
+    }
   }
 
   async removeAllTabs(): Promise<void> {
@@ -482,18 +525,26 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
       return;
     }
 
+    for (const t of this.tabs) {
+      await this.forgetSession(t.id);
+    }
+    await this.context.globalState.update('tabs.pendingRestore', undefined);
     this.tabs = [];
     this.activeTabId = null;
 
-    // Optionally clear workspace folders completely
     vscode.workspace.updateWorkspaceFolders(
       0,
-      vscode.workspace.workspaceFolders?.length || 0,
+      vscode.workspace.workspaceFolders?.length ?? 0,
     );
 
     await this.save();
     this.refresh();
     this._onDidChangeTabs.fire();
+  }
+
+  /** Drop the persisted editor session for a tab that no longer exists. */
+  private async forgetSession(tabId: string): Promise<void> {
+    await this.context.globalState.update(`tabs.openFiles.${tabId}`, undefined);
   }
 
   async renameTab(item: TabTreeItem): Promise<void> {
