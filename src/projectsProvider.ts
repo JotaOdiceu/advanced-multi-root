@@ -560,9 +560,13 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
         if (!this.uriUnderFolders(uri, folderUris)) {
           continue;
         }
+        // Keep focus put while filling the tab bar to avoid the viewport
+        // jumping to each file in turn. Pinning needs the editor active, so
+        // pinned ones do take focus briefly.
         await vscode.commands.executeCommand('vscode.open', uri, {
           preview: false,
           viewColumn: editor.viewColumn,
+          preserveFocus: !editor.pinned,
         });
         if (editor.pinned) {
           await vscode.commands.executeCommand('workbench.action.pinEditor');
