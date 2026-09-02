@@ -421,6 +421,40 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
     await this.switchProject(tabId);
   }
 
+  /** Status bar click / palette: pick a project from a QuickPick. */
+  async quickSwitch(): Promise<void> {
+    if (this.tabs.length === 0) {
+      vscode.window.showInformationMessage('No projects yet. Add one first.');
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(
+      this.tabs.map((tab) => ({
+        label:
+          tab.id === this.activeTabId
+            ? `$(folder-opened) ${tab.name}`
+            : tab.name,
+        description: tab.id === this.activeTabId ? '● active' : undefined,
+        detail: tab.folders.map(folderLabel).join(', '),
+        tabId: tab.id,
+      })),
+      { placeHolder: 'Switch to project' },
+    );
+    if (picked) {
+      await this.switchProject(picked.tabId);
+    }
+  }
+
+  /** Cycle to the next / previous project in the list. */
+  async cycleProject(direction: 1 | -1): Promise<void> {
+    if (this.tabs.length < 2) {
+      return;
+    }
+    const current = this.tabs.findIndex((t) => t.id === this.activeTabId);
+    const from = current === -1 ? (direction === 1 ? -1 : 0) : current;
+    const next = (from + direction + this.tabs.length) % this.tabs.length;
+    await this.switchProject(this.tabs[next].id);
+  }
+
   /**
    * The single entry point for making a project the active workspace. Every
    * caller (tree, status bar, add, remove) goes through here so the save →

@@ -2,81 +2,45 @@ import * as vscode from 'vscode';
 import { folderLabel, ProjectTab } from './projectsProvider';
 
 /**
- * Shows workspace tabs in the status bar.
- * Active tab is highlighted, clicking switches to that workspace.
- * Tabs spread from center to left and right.
+ * A single status bar item showing the active project. Clicking it opens the
+ * project QuickPick. Hidden while no projects exist.
  */
 export class StatusBarManager implements vscode.Disposable {
-  private items: vscode.StatusBarItem[] = [];
-
-  /** Central priority — tabs spread from center to left and right */
-  private static readonly CENTER_PRIORITY = 0;
+  private item: vscode.StatusBarItem;
 
   constructor(
     private getTabs: () => readonly ProjectTab[],
     private getActiveTabId: () => string | null,
   ) {
+    this.item = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Left,
+      0,
+    );
+    this.item.command = 'tabs.quickSwitch';
     this.update();
   }
 
-  /** Recreate status bar items */
   update(): void {
-    // Clear old items
-    this.disposeItems();
-
     const tabs = this.getTabs();
-    const activeId = this.getActiveTabId();
-
     if (tabs.length === 0) {
+      this.item.hide();
       return;
     }
 
-    // Sort tabs to spread from center to left and right
-    // High priority = further left. Active tab in center, others on sides.
-
-    tabs.forEach((tab, i) => {
-      const isActive = tab.id === activeId;
-      const folders = tab.folders.map(folderLabel).join(', ');
-
-      // Center spread: first tab highest priority, last tab lowest
-      const priority = StatusBarManager.CENTER_PRIORITY + (tabs.length - i);
-
-      const item = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Left,
-        priority,
-      );
-
-      // Highlight the active tab
-      if (isActive) {
-        item.text = `$(folder-opened) ${tab.name}`;
-        item.backgroundColor = new vscode.ThemeColor(
-          'statusBarItem.warningBackground',
-        );
-        item.tooltip = `● Active: ${folders}`;
-      } else {
-        item.text = `$(folder) ${tab.name}`;
-        item.tooltip = `Switch to: ${folders}`;
-      }
-
-      item.command = {
-        command: 'tabs.switchTabById',
-        title: 'Switch Tab',
-        arguments: [tab.id],
-      };
-
-      item.show();
-      this.items.push(item);
-    });
-  }
-
-  private disposeItems(): void {
-    for (const item of this.items) {
-      item.dispose();
+    const active = tabs.find((t) => t.id === this.getActiveTabId());
+    if (active) {
+      this.item.text = `$(folder-opened) ${active.name}`;
+      this.item.tooltip = `Active project: ${active.folders
+        .map(folderLabel)
+        .join(', ')}\nClick to switch project`;
+    } else {
+      this.item.text = '$(folder) Select project';
+      this.item.tooltip = 'Click to switch project';
     }
-    this.items = [];
+    this.item.show();
   }
 
   dispose(): void {
-    this.disposeItems();
+    this.item.dispose();
   }
 }
