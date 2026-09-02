@@ -14,7 +14,8 @@ restores the editors you had open for that project.
 ## Features
 
 - **Simplified Navigation** — Switch between projects instantly from the
-  sidebar or the status bar.
+  sidebar, from the status bar item (which shows the active project), or with
+  the `Next Project` / `Previous Project` commands.
 - **Session Memory** — Each project remembers the files you had open, which
   editor group they were in, which tab was active and which were pinned.
   Switch back and pick up where you left off.
@@ -50,7 +51,10 @@ view's inline buttons:
 | Advanced Multi-Root: Add Project                    | `tabs.addTab`           | Add one or more folders as a new project.                      |
 | Advanced Multi-Root: Rename Project                 | `tabs.renameTab`        | Rename the selected project.                                   |
 | Advanced Multi-Root: Open Project                   | `tabs.switchTab`        | Open / switch to the selected project.                         |
-| Advanced Multi-Root: Switch to Project by ID        | `tabs.switchTabById`    | Switch to a specific project (used by the status bar).         |
+| Advanced Multi-Root: Switch to Project by ID        | `tabs.switchTabById`    | Switch to a specific project (used internally).                |
+| Advanced Multi-Root: Switch Project...              | `tabs.quickSwitch`      | Pick a project from a quick pick (`Ctrl+Alt+P`).               |
+| Advanced Multi-Root: Next Project                   | `tabs.nextProject`      | Switch to the next project in the list (`Ctrl+Alt+]`).         |
+| Advanced Multi-Root: Previous Project               | `tabs.previousProject`  | Switch to the previous project in the list (`Ctrl+Alt+[`).     |
 | Advanced Multi-Root: Save Current Folder as Project | `tabs.saveCurrentAsTab` | Save the current workspace (all its folders) as a project.     |
 | Advanced Multi-Root: Refresh Projects               | `tabs.refresh`          | Refresh the project list.                                      |
 | Advanced Multi-Root: Remove Project                 | `tabs.removeTab`        | Remove the selected project.                                   |
