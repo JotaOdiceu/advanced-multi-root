@@ -1,5 +1,7 @@
 # Advanced Multi-Root
 
+[![CI](https://github.com/JotaOdiceu/advanced-multi-root/actions/workflows/ci.yml/badge.svg)](https://github.com/JotaOdiceu/advanced-multi-root/actions/workflows/ci.yml)
+
 **Manage multiple projects in a single VS Code window with tabs.**
 
 <p align="center">
