@@ -1,3 +1,4 @@
+import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { ProjectsProvider, TabTreeItem } from './projectsProvider';
 import { StatusBarManager } from './statusBarManager';
@@ -78,7 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
         const defaultUri =
           current !== 'Not set (uses home directory)'
             ? vscode.Uri.file(current)
-            : vscode.Uri.file(require('node:os').homedir());
+            : vscode.Uri.file(os.homedir());
         const uri = await vscode.window.showOpenDialog({
           canSelectFolders: true,
           canSelectFiles: false,
