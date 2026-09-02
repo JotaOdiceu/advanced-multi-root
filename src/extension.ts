@@ -41,6 +41,15 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('tabs.switchTabById', (tabId: string) =>
       provider.switchTabById(tabId),
     ),
+    vscode.commands.registerCommand('tabs.quickSwitch', () =>
+      provider.quickSwitch(),
+    ),
+    vscode.commands.registerCommand('tabs.nextProject', () =>
+      provider.cycleProject(1),
+    ),
+    vscode.commands.registerCommand('tabs.previousProject', () =>
+      provider.cycleProject(-1),
+    ),
     vscode.commands.registerCommand('tabs.saveCurrentAsTab', () =>
       provider.saveCurrentAsTab(),
     ),

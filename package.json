@@ -79,6 +79,22 @@
         "title": "Switch to Project by ID"
       },
       {
+        "command": "tabs.quickSwitch",
+        "category": "Advanced Multi-Root",
+        "title": "Switch Project...",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "tabs.nextProject",
+        "category": "Advanced Multi-Root",
+        "title": "Next Project"
+      },
+      {
+        "command": "tabs.previousProject",
+        "category": "Advanced Multi-Root",
+        "title": "Previous Project"
+      },
+      {
         "command": "tabs.saveCurrentAsTab",
         "category": "Advanced Multi-Root",
         "title": "Save Current Folder as Project",
@@ -95,6 +111,23 @@
         "category": "Advanced Multi-Root",
         "title": "Settings",
         "icon": "$(gear)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "tabs.quickSwitch",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p"
+      },
+      {
+        "command": "tabs.nextProject",
+        "key": "ctrl+alt+]",
+        "mac": "cmd+alt+]"
+      },
+      {
+        "command": "tabs.previousProject",
+        "key": "ctrl+alt+[",
+        "mac": "cmd+alt+["
       }
     ],
     "configuration": {
