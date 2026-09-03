@@ -1,0 +1,8 @@
+# Normalize line endings to LF on checkout everywhere so the Biome formatter
+# check passes on Windows runners (which default to core.autocrlf=true).
+* text=auto eol=lf
+
+*.png binary
+*.gif binary
+*.svg text eol=lf
+*.vsix binary
