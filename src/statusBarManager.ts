@@ -28,14 +28,21 @@ export class StatusBarManager implements vscode.Disposable {
     }
 
     const active = tabs.find((t) => t.id === this.getActiveTabId());
+    // The swap icon hints that the item is a switcher, not just a label.
     if (active) {
-      this.item.text = `$(folder-opened) ${active.name}`;
-      this.item.tooltip = `Active project: ${active.folders
+      this.item.text = `$(folder-opened) ${active.name} $(arrow-swap)`;
+      this.item.tooltip = `Click to switch project\nActive: ${active.folders
         .map(folderLabel)
-        .join(', ')}\nClick to switch project`;
+        .join(', ')}`;
+      this.item.accessibilityInformation = {
+        label: `Active project ${active.name}. Click to switch project`,
+      };
     } else {
-      this.item.text = '$(folder) Select project';
+      this.item.text = '$(folder) Select project $(arrow-swap)';
       this.item.tooltip = 'Click to switch project';
+      this.item.accessibilityInformation = {
+        label: 'No active project. Click to switch project',
+      };
     }
     this.item.show();
   }
