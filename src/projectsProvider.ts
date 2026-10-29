@@ -30,6 +30,23 @@ interface PendingRestore {
   editors: SavedEditor[];
 }
 
+/** The slice of the built-in Git extension's API (vscode.git, v1) we use. */
+interface GitRepository {
+  rootUri: vscode.Uri;
+}
+interface GitAPI {
+  state: 'uninitialized' | 'initialized';
+  onDidChangeState: vscode.Event<'uninitialized' | 'initialized'>;
+  repositories: GitRepository[];
+  onDidOpenRepository: vscode.Event<GitRepository>;
+  getRepository(uri: vscode.Uri): GitRepository | null;
+}
+
+/** Max wait for the Git extension to finish its initial repository scan. */
+const GIT_INIT_TIMEOUT_MS = 5000;
+/** Extra wait for a repository opened after the scan (swaps that don't reload). */
+const GIT_REPO_GRACE_MS = 2000;
+
 // ── Tree Item ──────────────────────────────────────────────
 
 export class TabTreeItem extends vscode.TreeItem {
@@ -72,6 +89,27 @@ export function folderLabel(folder: ProjectFolder): string {
   } catch {
     return folder.uri;
   }
+}
+
+/** Resolve on the first event passing `predicate`, or after `timeoutMs`. */
+function waitForEvent<T>(
+  event: vscode.Event<T>,
+  predicate: (e: T) => boolean,
+  timeoutMs: number,
+): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      sub.dispose();
+      resolve();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    const sub = event((e) => {
+      if (predicate(e)) {
+        done();
+      }
+    });
+  });
 }
 
 // ── Provider ───────────────────────────────────────────────
@@ -609,16 +647,67 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
 
     this.restoring = true;
     try {
-      await this.restoreEditors(tab, pending.editors);
+      // The swap restarted the Git extension too. VS Code picks the repository
+      // shown in the status bar (branch/checkout item) from the focused editor
+      // or SCM view, so only refocus once the new repository exists —
+      // otherwise the item stays empty until a window reload.
+      const hasRepo = await this.waitForGitRepository(tab);
+      await this.restoreEditors(tab, pending.editors, hasRepo);
       await this.context.globalState.update('tabs.pendingRestore', undefined);
     } finally {
       this.restoring = false;
     }
   }
 
+  /**
+   * Wait until the Git extension has a repository for one of the tab's
+   * folders. Resolves false when there is none (not a git project, Git
+   * disabled, or nothing showed up in time) — never rejects.
+   */
+  private async waitForGitRepository(tab: ProjectTab): Promise<boolean> {
+    let api: GitAPI;
+    try {
+      const ext = vscode.extensions.getExtension('vscode.git');
+      if (!ext) {
+        return false;
+      }
+      const exports = ext.isActive ? ext.exports : await ext.activate();
+      api = exports.getAPI(1); // throws when git.enabled is false
+    } catch {
+      return false;
+    }
+
+    const folderUris = this.tabFolderUris(tab);
+    const matches = (repo: GitRepository) =>
+      this.uriUnderFolders(repo.rootUri, folderUris);
+    const found = () =>
+      folderUris.some((f) => api.getRepository(f) !== null) ||
+      api.repositories.some(matches);
+
+    if (api.state !== 'initialized') {
+      await waitForEvent(
+        api.onDidChangeState,
+        (s) => s === 'initialized',
+        GIT_INIT_TIMEOUT_MS,
+      );
+    }
+    if (found()) {
+      return true;
+    }
+    // Without a reload the folders change under a live Git extension, which
+    // opens the new repositories asynchronously after its own folder event.
+    await waitForEvent(
+      api.onDidOpenRepository,
+      (r) => matches(r) || found(),
+      GIT_REPO_GRACE_MS,
+    );
+    return found();
+  }
+
   private async restoreEditors(
     tab: ProjectTab,
     editors: SavedEditor[],
+    hasRepo = false,
   ): Promise<void> {
     const folderUris = this.tabFolderUris(tab);
     // Editors VS Code already restored (after a reload) or a previous,
@@ -678,6 +767,11 @@ export class ProjectsProvider implements vscode.TreeDataProvider<TabTreeItem> {
         // best effort
       }
     } else {
+      // No editor to focus: pass through the SCM view so it selects the new
+      // repository, bringing the status bar item back.
+      if (hasRepo) {
+        await vscode.commands.executeCommand('workbench.view.scm');
+      }
       await vscode.commands.executeCommand('workbench.view.explorer');
     }
   }
