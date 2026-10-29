@@ -58,12 +58,29 @@ suite('editor session persistence', () => {
       'tabs.pendingRestore': { tabId: 'a', editors: [] },
     });
     // The constructor also kicks off a restore; wait for the marker to clear.
+    // The restore first waits on the Git extension (bounded by its timeouts).
     new ProjectsProvider(ctx);
 
-    for (let i = 0; i < 40 && ctx.globalState.get('tabs.pendingRestore'); i++) {
+    for (let i = 0; i < 200 && ctx.globalState.get('tabs.pendingRestore'); i++) {
       await new Promise((r) => setTimeout(r, 50));
     }
 
     assert.strictEqual(ctx.globalState.get('tabs.pendingRestore'), undefined);
+  });
+
+  test('waitForGitRepository resolves within its timeouts and never throws', async () => {
+    const ctx = makeContext({
+      'tabs.projectTabs': [
+        { id: 'b', name: 'B', folders: [{ uri: fixtureUri('project-b') }] },
+      ],
+    });
+    const provider = new ProjectsProvider(ctx);
+    const tab = provider.getTabs()[0];
+
+    const started = Date.now();
+    const result = await (provider as any).waitForGitRepository(tab);
+
+    assert.strictEqual(typeof result, 'boolean');
+    assert.ok(Date.now() - started < 8000, 'wait is bounded');
   });
 });
